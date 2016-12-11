@@ -37,6 +37,10 @@ else
   LOCAL_CFLAGS += -DOVERSCAN_PERCENT=0
 endif
 
+ifeq ($(RECOVERY_GRAPHICS_FORCE_SINGLE_BUFFER), true)
+LOCAL_CFLAGS += -DRECOVERY_GRAPHICS_FORCE_SINGLE_BUFFER
+endif
+
 include $(BUILD_STATIC_LIBRARY)
 
 # Used by OEMs for factory test images.
