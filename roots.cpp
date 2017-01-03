@@ -281,11 +281,6 @@ int setup_install_mounts() {
             }
 
         } else {
-#ifdef X86VBOX_RECOVERY
-        	if (strcmp(v->mount_point, "/system") == 0) {
-        		continue;
-        	}
-#endif
             if (ensure_path_unmounted(v->mount_point) != 0) {
                 LOGE("failed to unmount %s\n", v->mount_point);
                 return -1;

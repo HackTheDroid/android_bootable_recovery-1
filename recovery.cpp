@@ -773,6 +773,30 @@ static int apply_from_sdcard(Device* device, bool* wipe_cache) {
     return status;
 }
 
+#ifdef X86VBOX_RECOVERY
+static const char *X86VBOX_ROOT = "/vendor";
+
+static int apply_from_x86vbox(Device* device, bool* wipe_cache) {
+    modified_flash = true;
+
+    char* path = browse_directory(X86VBOX_ROOT, device);
+    if (path == NULL) {
+        ui->Print("\n-- No package file selected.\n");
+        return INSTALL_ERROR;
+    }
+
+    ui->Print("\n-- Install %s ...\n", path);
+    set_sdcard_update_bootloader_message();
+    void* token = start_sdcard_fuse(path);
+
+    int status = install_package(FUSE_SIDELOAD_HOST_PATHNAME, wipe_cache,
+                                 TEMPORARY_INSTALL_FILE, false);
+
+    finish_sdcard_fuse(token);
+    return status;
+}
+#endif
+
 // Return REBOOT, SHUTDOWN, or REBOOT_BOOTLOADER.  Returning NO_ACTION
 // means to take the default, which is to reboot or shutdown depending
 // on if the --shutdown_after flag was passed to recovery.
@@ -825,7 +849,11 @@ prompt_and_wait(Device* device, int status) {
                 {
                     bool adb = (chosen_action == Device::APPLY_ADB_SIDELOAD);
                     if (adb) {
+#ifdef X86VBOX_RECOVERY
+                        status = apply_from_x86vbox(device, &should_wipe_cache);
+#else
                         status = apply_from_adb(ui, &should_wipe_cache, TEMPORARY_INSTALL_FILE);
+#endif
                     } else {
                         status = apply_from_sdcard(device, &should_wipe_cache);
                     }
