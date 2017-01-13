@@ -293,7 +293,7 @@ int setup_install_mounts() {
 #ifdef X86VBOX_RECOVERY
 //
 // Unmount or format volumes
-// format - if it is not zeror, format the volume.
+// format - if it is not zero, format the volume.
 //
 int unmount_format_volumes(int format) {
     if (fstab == NULL) {
