@@ -28,6 +28,10 @@ include $(BUILD_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 
+ifeq ($(X86VBOX_RECOVERY), true)
+LOCAL_CFLAGS += -DX86VBOX_RECOVERY
+endif
+
 LOCAL_SRC_FILES := \
     adb_install.cpp \
     asn1_decoder.cpp \
