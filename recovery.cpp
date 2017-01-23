@@ -1188,7 +1188,7 @@ static int apply_from_sdcard(Device* device, bool* wipe_cache) {
 }
 
 #ifdef X86VBOX_RECOVERY
-static const char *X86VBOX_ROOT = "/vendor";
+static const char *X86VBOX_ROOT = "/mnt";
 
 static int apply_from_x86vbox(Device* device, bool* wipe_cache) {
     modified_flash = true;
@@ -1201,13 +1201,61 @@ static int apply_from_x86vbox(Device* device, bool* wipe_cache) {
 
     ui->Print("\n-- Install %s ...\n", path);
     set_sdcard_update_bootloader_message();
-    void* token = start_sdcard_fuse(path);
 
-    int status = install_package(FUSE_SIDELOAD_HOST_PATHNAME, wipe_cache,
-                                 TEMPORARY_INSTALL_FILE, false);
+    // We used to use fuse in a thread as opposed to a process. Since accessing
+    // through fuse involves going from kernel to userspace to kernel, it leads
+    // to deadlock when a page fault occurs. (Bug: 26313124)
+    pid_t child;
+    if ((child = fork()) == 0) {
+        bool status = start_sdcard_fuse(path);
 
-    finish_sdcard_fuse(token);
-    return status;
+        _exit(status ? EXIT_SUCCESS : EXIT_FAILURE);
+    }
+
+    // FUSE_SIDELOAD_HOST_PATHNAME will start to exist once the fuse in child
+    // process is ready.
+    int result = INSTALL_ERROR;
+    int status;
+    bool waited = false;
+    for (int i = 0; i < SDCARD_INSTALL_TIMEOUT; ++i) {
+        if (waitpid(child, &status, WNOHANG) == -1) {
+            result = INSTALL_ERROR;
+            waited = true;
+            break;
+        }
+
+        struct stat sb;
+        if (stat(FUSE_SIDELOAD_HOST_PATHNAME, &sb) == -1) {
+            if (errno == ENOENT && i < SDCARD_INSTALL_TIMEOUT-1) {
+                sleep(1);
+                continue;
+            } else {
+                LOGE("Timed out waiting for the fuse-provided package.\n");
+                result = INSTALL_ERROR;
+                kill(child, SIGKILL);
+                break;
+            }
+        }
+
+        result = install_package(FUSE_SIDELOAD_HOST_PATHNAME, wipe_cache,
+                                 TEMPORARY_INSTALL_FILE, false, 0/*retry_count*/);
+        break;
+    }
+
+    if (!waited) {
+        // Calling stat() on this magic filename signals the fuse
+        // filesystem to shut down.
+        struct stat sb;
+        stat(FUSE_SIDELOAD_HOST_EXIT_PATHNAME, &sb);
+
+        waitpid(child, &status, 0);
+    }
+
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        LOGE("Error exit from the fuse process: %d\n", WEXITSTATUS(status));
+    }
+
+    return result;
 }
 #endif
 
