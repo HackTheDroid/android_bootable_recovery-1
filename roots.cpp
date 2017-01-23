@@ -293,11 +293,6 @@ int setup_install_mounts() {
             }
 
         } else {
-#ifdef X86VBOX_RECOVERY
-        	if (strcmp(v->mount_point, "/system") == 0) {
-        		continue;
-        	}
-#endif
             if (ensure_path_unmounted(v->mount_point) != 0) {
                 LOGE("failed to unmount %s\n", v->mount_point);
                 return -1;
@@ -306,3 +301,43 @@ int setup_install_mounts() {
     }
     return 0;
 }
+
+#ifdef X86VBOX_RECOVERY
+//
+// Unmount or format volumes
+// format - if it is not zero, format the volume.
+//
+int unmount_format_volumes(int format) {
+    if (fstab == NULL) {
+        LOGE("can't set up install mounts: no fstab loaded\n");
+        return -1;
+    }
+    for (int i = 0; i < fstab->num_entries; ++i) {
+        Volume* v = fstab->recs + i;
+
+        if (strcmp(v->mount_point, "/tmp") == 0) {
+            if (ensure_path_mounted(v->mount_point) != 0) {
+                LOGE("failed to mount %s\n", v->mount_point);
+                return -1;
+            }
+        } else {
+            if (ensure_path_unmounted(v->mount_point) != 0) {
+                LOGE("failed to unmount %s\n", v->mount_point);
+                return -1;
+            }
+            if (format) {
+            	if(strcmp(v->mount_point, "/system") == 0 ||
+            			strcmp(v->mount_point, "/data") == 0 ||
+            			strcmp(v->mount_point, "/cache") == 0) {
+            		int result = format_volume(v->mount_point);
+                    if (result != 0) {
+                        LOGE("failed to format volume:%s; aborting\n", v->mount_point);
+                        return result;
+                    }
+            	}
+            }
+        }
+    }
+    return 0;
+}
+#endif
